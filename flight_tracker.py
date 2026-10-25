@@ -21,7 +21,7 @@ TARGETS = [
         "arrival_id": "EDI",        # Aeropuerto de Edimburgo
         "dates": [
             "2027-06-12", "2027-06-18", "2027-06-24", # Quincena de junio
-            "2027-09-01", "2027-09-03", "2027-09-05"  # Primera semana de septiembre
+            "2027-08-28", "2027-09-01", "2027-09-03"  # Primera semana de septiembre
         ]
     }
 ]
