@@ -56,13 +56,17 @@ if df_city.empty:
     st.info(f"Aún no hay datos registrados para {selected_city}.")
     st.stop()
 
-# Análisis de mejor oferta
+# Análisis de la mejor tarifa histórica
 min_row = df_city.loc[df_city["price_eur"].idxmin()]
 min_total = min_row["price_eur"]
 min_pax = min_row["price_per_passenger"]
 avg_total = df_city["price_eur"].mean()
 
-# Ventana recomendada según el destino (NYC: ~140 días; Edimburgo en Europa: ~75-90 días)
+# Fecha en la que se encontró ese precio mínimo
+min_query_date = min_row["query_timestamp"][:10]  # Formato YYYY-MM-DD
+min_query_days_ago = min_row["days_before_flight"]
+
+# Ventana recomendada según el destino
 best_dep = pd.to_datetime(min_row["departure_date"])
 is_europe = "Edimburgo" in min_row["destination_city"]
 days_window_start = 90 if is_europe else 160
@@ -75,15 +79,23 @@ window_end = (best_dep - pd.Timedelta(days=days_window_end)).strftime("%d/%m/%Y"
 st.success(f"""
 ### 🎯 Recomendación de Compra ({min_row['destination_city']})
 * **Fecha ideal para reservar:** entre el **{window_start}** y el **{window_end}** (antelación recomendada de ~{days_window_end}-{days_window_start} días).  
-* **Tarifa más baja registrada:** Salida el **{min_row['departure_date']}** hacia **{min_row['arrival_airport']}** con **{min_row['airline']}** por **{min_total:,.0f} €** total (**{min_pax:,.0f} €/persona**).
+* **Tarifa más baja registrada:** Salida el **{min_row['departure_date']}** hacia **{min_row['arrival_airport']}** con **{min_row['airline']}** por **{min_total:,.0f} €** total (**{min_pax:,.0f} €/persona**).  
+* **Detectada el:** **{min_query_date}** (a {min_query_days_ago} días de antelación).
 """)
 
 # Tarjetas KPI
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Mínimo Total (4 pax)", f"{min_total:,.0f} €", f"{min_pax:,.0f} €/persona")
+
+# Aquí se añade la fecha de detección del precio mínimo en el subtítulo del KPI
+col1.metric(
+    label="Mínimo Total (4 pax)",
+    value=f"{min_total:,.0f} €",
+    delta=f"Visto el {min_query_date} ({min_pax:,.0f} €/pax)",
+    delta_color="off"
+)
 col2.metric("Promedio Total (4 pax)", f"{avg_total:,.0f} €", f"{(avg_total / 4):,.0f} €/persona")
 col3.metric("Mejor Salida", min_row["departure_date"], f"{min_row['airline']} ({min_row['arrival_airport']})")
-col4.metric("Ofertas Analizadas", len(df_city), f"Última: {df_city['query_timestamp'].iloc[0][:10]}")
+col4.metric("Ofertas Analizadas", len(df_city), f"Última consulta: {df_city['query_timestamp'].iloc[0][:10]}")
 
 st.divider()
 
@@ -119,7 +131,7 @@ with g2:
     fig_dates.update_layout(margin=dict(l=20, r=20, t=20, b=20))
     st.plotly_chart(fig_dates, use_container_width=True)
 
-# Tabla filtrable
+# Tabla interactiva
 st.subheader("Listado Detallado de Vuelos Directos")
 
 c1, c2 = st.columns(2)
@@ -136,14 +148,14 @@ display_cols = [
     "price_per_passenger", "price_eur"
 ]
 rename_cols = {
-    "query_timestamp": "Consulta",
+    "query_timestamp": "Fecha Consulta",
     "destination_city": "Destino",
     "departure_date": "Ida",
     "return_date": "Vuelta",
     "arrival_airport": "Aeropuerto",
     "airline": "Aerolínea",
     "flight_number": "Vuelo",
-    "days_before_flight": "Antelación",
+    "days_before_flight": "Antelación (días)",
     "price_per_passenger": "Precio/Pax (€)",
     "price_eur": "Total 4 Pax (€)"
 }
