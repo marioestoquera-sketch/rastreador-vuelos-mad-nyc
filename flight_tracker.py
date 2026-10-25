@@ -6,7 +6,7 @@ from serpapi import GoogleSearch
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 DB_PATH = "madrid_nyc_flights.db"
 
-# Fechas fijas de tu viaje objetivo (por ejemplo, salida el 11 de junio y regreso el 25 de junio de 2027)
+# Fechas objetivo
 TARGET_DEP_DATE = "2027-06-11"
 TARGET_RET_DATE = "2027-06-25"
 
@@ -19,7 +19,8 @@ def init_db():
             query_timestamp TEXT NOT NULL,
             days_before_flight INTEGER NOT NULL,
             origin TEXT NOT NULL,
-            destination TEXT NOT NULL,
+            destination_city TEXT NOT NULL,
+            arrival_airport TEXT,
             departure_date TEXT NOT NULL,
             return_date TEXT,
             airline TEXT,
@@ -39,18 +40,17 @@ def fetch_and_store_prices():
 
     today = datetime.now()
     dep_datetime = datetime.strptime(TARGET_DEP_DATE, "%Y-%m-%d")
-    
-    # Días de antelación con los que se realiza la consulta hoy
     days_in_advance = (dep_datetime - today).days
 
     if days_in_advance < 0:
         print("La fecha del viaje ya ha pasado.")
         return
 
+    # /m/02_286 engloba todos los aeropuertos de Nueva York (JFK, EWR, LGA)
     params = {
         "engine": "google_flights",
         "departure_id": "MAD",
-        "arrival_id": "JFK",
+        "arrival_id": "/m/02_286",
         "outbound_date": TARGET_DEP_DATE,
         "return_date": TARGET_RET_DATE,
         "currency": "EUR",
@@ -58,7 +58,7 @@ def fetch_and_store_prices():
         "api_key": SERPAPI_KEY
     }
 
-    print(f"[{today.strftime('%Y-%m-%d')}] Consultando tarifas MAD -> JFK para {TARGET_DEP_DATE} (Antelación: {days_in_advance} días)...")
+    print(f"[{today.strftime('%Y-%m-%d')}] Consultando tarifas MAD -> Todos los aeropuertos NYC para {TARGET_DEP_DATE}...")
     
     search = GoogleSearch(params)
     results = search.get_dict()
@@ -91,16 +91,22 @@ def fetch_and_store_prices():
         flight_no = first_leg.get("flight_number", "N/A")
         stops = len(flights_list) - 1
 
+        # Extraer el aeropuerto de llegada exacto (ej. JFK o EWR)
+        last_leg = flights_list[-1]
+        arrival_airport = last_leg.get("arrival_airport", {}).get("id", "NYC")
+
         cursor.execute("""
             INSERT INTO flight_prices (
-                query_timestamp, days_before_flight, origin, destination,
-                departure_date, return_date, airline, flight_number, stops, price_eur, currency
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                query_timestamp, days_before_flight, origin, destination_city,
+                arrival_airport, departure_date, return_date, airline, flight_number,
+                stops, price_eur, currency
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             today.strftime("%Y-%m-%d %H:%M:%S"),
             days_in_advance,
             "MAD",
-            "JFK",
+            "NYC",
+            arrival_airport,
             TARGET_DEP_DATE,
             TARGET_RET_DATE,
             airline,
