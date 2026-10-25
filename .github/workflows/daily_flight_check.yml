@@ -1,0 +1,34 @@
+name: Consulta Diaria MAD-NYC
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  track-flights:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar librerías necesarias
+        run: pip install google-search-results
+
+      - name: Ejecutar rastreador
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        run: python flight_tracker.py
+
+      - name: Guardar base de datos actualizada en el repositorio
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add madrid_nyc_flights.db
+          git commit -m "Actualizar precios de vuelos [skip ci]" || exit 0
+          git push
