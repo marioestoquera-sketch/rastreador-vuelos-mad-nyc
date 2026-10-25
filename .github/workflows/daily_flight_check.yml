@@ -31,4 +31,4 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add madrid_nyc_flights.db
           git commit -m "Actualizar precios de vuelos [skip ci]" || exit 0
-          git push
+          git push origin dosdestinos
