@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Monitor de Vuelos MAD ➔ NYC (4 Personas - Junio 2027)</title>
+  <title>Monitor de Vuelos: MAD ➔ NYC & EDI (4 Pax)</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js -->
@@ -19,10 +19,10 @@
     <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
       <div>
         <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-          <span>✈️</span> MAD ➔ NYC · Junio 2027 <span class="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-full font-medium">4 Pasajeros</span>
+          <span>✈️</span> Monitor de Vuelos Vacacionales <span class="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2.5 py-1 rounded-full font-medium">4 Pasajeros</span>
         </h1>
         <p class="text-slate-400 text-sm mt-1">
-          Seguimiento para 2 adultos y 2 menores (16 y 13 años). Vuelos directos, estancia de 8 días.
+          Seguimiento diario de vuelos directos desde Madrid (MAD) · Estancias de 8 días.
         </p>
       </div>
 
@@ -37,27 +37,33 @@
       </div>
     </header>
 
-    <!-- Módulo Destacado: Recomendación de Compra -->
-    <div class="bg-gradient-to-r from-indigo-950/70 via-slate-800/80 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+    <!-- Selector de Destino -->
+    <div class="flex flex-wrap items-center gap-3 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+      <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Destino:</span>
+      <div id="destination-filters" class="flex flex-wrap gap-2">
+        <button onclick="setDestination('Todos')" class="dest-btn px-3 py-1 text-xs rounded-lg font-medium transition bg-indigo-600 text-white" data-dest="Todos">Todos los destinos</button>
+      </div>
+    </div>
+
+    <!-- Módulo Destacado: Recomendación y Fecha de Detección -->
+    <div class="bg-gradient-to-r from-indigo-950/70 via-slate-800/80 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 shadow-xl">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div class="space-y-2">
           <div class="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider">
-            <span>🎯</span> Predicción y Ventana Óptima de Compra
+            <span>🎯</span> Predicción y Ventana Óptima de Reserva
           </div>
           <h2 id="recommendation-title" class="text-2xl md:text-3xl font-extrabold text-white">
             Analizando datos históricos...
           </h2>
           <p id="recommendation-desc" class="text-sm text-slate-300 max-w-2xl">
-            El sistema calculará con precisión el rango de fechas en que las aerolíneas suelen liberar sus tarifas mínimas para la segunda quincena de junio.
+            Calculando la fecha óptima en que las aerolíneas suelen registrar sus tarifas más bajas.
           </p>
         </div>
 
-        <div class="flex items-center gap-4 bg-slate-900/80 border border-slate-700/60 p-4 rounded-xl min-w-[260px]">
-          <div>
-            <span class="text-xs text-slate-400 block uppercase">Fecha estimada de reserva</span>
-            <span id="target-buy-date" class="text-xl font-bold text-emerald-400 block mt-0.5">Calculando...</span>
-            <span id="target-buy-advance" class="text-[11px] text-slate-400 block">Antelación recomendada: ~120-150 días</span>
-          </div>
+        <div class="flex flex-col gap-1 bg-slate-900/80 border border-slate-700/60 p-4 rounded-xl min-w-[260px]">
+          <span class="text-xs text-slate-400 uppercase">Ventana recomendada</span>
+          <span id="target-buy-date" class="text-xl font-bold text-emerald-400 mt-0.5">Calculando...</span>
+          <span id="target-detected-on" class="text-xs text-indigo-300 font-medium">--</span>
         </div>
       </div>
     </div>
@@ -65,317 +71,9 @@
     <!-- KPIs -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
-        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Mínimo Total (4 Personas)</span>
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Mínimo Total (4 Pax)</span>
         <div class="mt-2 flex items-baseline gap-2">
           <span id="kpi-min-total" class="text-3xl font-extrabold text-emerald-400">-- €</span>
         </div>
-        <p id="kpi-min-per-pax" class="text-xs text-slate-400 mt-1">-- € por persona</p>
-      </div>
-
-      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
-        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Media Total (4 Personas)</span>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="kpi-avg-total" class="text-3xl font-extrabold text-white">-- €</span>
-        </div>
-        <p id="kpi-avg-per-pax" class="text-xs text-slate-400 mt-1">-- € promedio / pasajero</p>
-      </div>
-
-      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
-        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Mejor Salida Detectada</span>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="kpi-best-date" class="text-2xl font-extrabold text-cyan-400">--</span>
-        </div>
-        <p id="kpi-best-date-airline" class="text-xs text-slate-400 mt-1">Directo a NYC</p>
-      </div>
-
-      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
-        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Historial Registrado</span>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="kpi-records" class="text-3xl font-extrabold text-indigo-400">0</span>
-          <span class="text-sm text-slate-400">ofertas</span>
-        </div>
-        <p id="kpi-last-query" class="text-xs text-slate-400 mt-1">Última: --</p>
-      </div>
-    </div>
-
-    <!-- Gráficos -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 bg-slate-800/60 border border-slate-800 rounded-xl p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
-            Curva de Precio Mínimo para 4 Personas (€)
-          </h2>
-          <span class="text-xs text-slate-400">Evolución en el tiempo</span>
-        </div>
-        <div class="h-64">
-          <canvas id="timelineChart"></canvas>
-        </div>
-      </div>
-
-      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
-            Comparativa por Día de Salida
-          </h2>
-          <span class="text-xs text-slate-400">Promedio total (4 pax)</span>
-        </div>
-        <div class="h-64">
-          <canvas id="datesChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tabla Detallada -->
-    <div class="bg-slate-800/60 border border-slate-800 rounded-xl overflow-hidden">
-      <div class="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
-          Registro Histórico de Vuelos Directos (4 Pasajeros)
-        </h2>
-        <input type="text" id="filter-input" placeholder="Filtrar por aerolínea o fecha..." onkeyup="filterTable()" class="bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 py-1.5 rounded-lg focus:outline-none focus:border-indigo-500">
-      </div>
-
-      <div class="overflow-x-auto max-h-96">
-        <table class="w-full text-left text-xs text-slate-300">
-          <thead class="bg-slate-900/80 uppercase font-semibold text-slate-400 sticky top-0 border-b border-slate-800">
-            <tr>
-              <th class="p-3">Fecha Consulta</th>
-              <th class="p-3">Salida (8 días)</th>
-              <th class="p-3">Destino</th>
-              <th class="p-3">Aerolínea</th>
-              <th class="p-3">Vuelo</th>
-              <th class="p-3">Antelación</th>
-              <th class="p-3 text-right">Precio / Pax</th>
-              <th class="p-3 text-right">Total (4 Pax)</th>
-            </tr>
-          </thead>
-          <tbody id="table-body" class="divide-y divide-slate-800/50">
-            <tr>
-              <td colspan="8" class="p-6 text-center text-slate-500">Cargando base de datos...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-  </div>
-
-  <script>
-    let timelineChart = null;
-    let datesChart = null;
-    let allRecords = [];
-
-    async function loadDatabase() {
-      const badge = document.getElementById("status-badge");
-      badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-2";
-      badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Cargando datos...';
-
-      try {
-        const SQL = await initSqlJs({
-          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
-        });
-
-        const response = await fetch("./madrid_nyc_flights.db", { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error("No se pudo descargar madrid_nyc_flights.db (HTTP " + response.status + ")");
-        }
-
-        const buffer = await response.arrayBuffer();
-        const db = new SQL.Database(new Uint8Array(buffer));
-
-        const res = db.exec(`
-          SELECT 
-            query_timestamp, days_before_flight, origin, destination_city,
-            arrival_airport, departure_date, return_date, trip_duration_days,
-            airline, flight_number, stops, price_eur, currency
-          FROM flight_prices
-          ORDER BY query_timestamp DESC, price_eur ASC
-        `);
-
-        if (!res.length || !res[0].values.length) {
-          badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300";
-          badge.innerHTML = "Sin registros todavía";
-          return;
-        }
-
-        const columns = res[0].columns;
-        allRecords = res[0].values.map(row => {
-          let obj = {};
-          columns.forEach((col, idx) => obj[col] = row[idx]);
-          obj.price_per_pax = Math.round(obj.price_eur / 4);
-          return obj;
-        });
-
-        badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-        badge.innerHTML = "✓ Datos actualizados";
-
-        renderDashboard(allRecords);
-
-      } catch (err) {
-        console.error(err);
-        badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20";
-        badge.innerHTML = "Error al leer DB";
-        document.getElementById("table-body").innerHTML = `
-          <tr><td colspan="8" class="p-6 text-center text-rose-400">${err.message}</td></tr>`;
-      }
-    }
-
-    function renderDashboard(records) {
-      const prices = records.map(r => r.price_eur);
-      const minPrice = Math.min(...prices);
-      const minRecord = records.find(r => r.price_eur === minPrice);
-      const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-
-      // KPIs
-      document.getElementById("kpi-min-total").textContent = `${minPrice.toLocaleString()} €`;
-      document.getElementById("kpi-min-per-pax").textContent = `${Math.round(minPrice / 4).toLocaleString()} € por persona (${minRecord.airline})`;
-      document.getElementById("kpi-avg-total").textContent = `${avgPrice.toLocaleString()} €`;
-      document.getElementById("kpi-avg-per-pax").textContent = `${Math.round(avgPrice / 4).toLocaleString()} € promedio / pax`;
-      document.getElementById("kpi-best-date").textContent = minRecord.departure_date;
-      document.getElementById("kpi-best-date-airline").textContent = `${minRecord.airline} ➔ ${minRecord.arrival_airport}`;
-      document.getElementById("kpi-records").textContent = records.length;
-      document.getElementById("kpi-last-query").textContent = `Última: ${records[0].query_timestamp.slice(0, 16)}`;
-
-      // Motor de Recomendación de Fecha de Compra
-      calculateOptimalPurchaseWindow(records, minRecord);
-
-      // Gráficos
-      renderTimeline(records);
-      renderDepartureComparison(records);
-
-      // Tabla
-      renderTable(records);
-    }
-
-    function calculateOptimalPurchaseWindow(records, bestOffer) {
-      // Tomamos la fecha del vuelo más barato detectado
-      const flightDate = new Date(bestOffer.departure_date);
-
-      // Ventana de oro estadística para vuelos transatlánticos de temporada alta (junio): 130 a 160 días antes
-      const targetWindowStart = new Date(flightDate);
-      targetWindowStart.setDate(targetWindowStart.getDate() - 160);
-
-      const targetWindowEnd = new Date(flightDate);
-      targetWindowEnd.setDate(targetWindowEnd.getDate() - 130);
-
-      const options = { month: 'long', year: 'numeric' };
-      const startStr = targetWindowStart.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-      const endStr = targetWindowEnd.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
-
-      document.getElementById("recommendation-title").textContent = 
-        `Reserva recomendada entre el ${startStr} y el ${endStr}`;
-      
-      document.getElementById("recommendation-desc").textContent = 
-        `Para viajar en junio de 2027 a Nueva York con 4 pasajeros, la ventana de mínimos suele consolidarse entre 4 y 5 meses antes. La mejor combinación actual es saliendo el ${bestOffer.departure_date} con ${bestOffer.airline} por ${bestOffer.price_eur.toLocaleString()} € en total (${bestOffer.price_per_pax.toLocaleString()} €/pax).`;
-
-      document.getElementById("target-buy-date").textContent = `${startStr} - ${endStr}`;
-    }
-
-    function renderTimeline(records) {
-      const dailyMins = {};
-      records.forEach(r => {
-        const day = r.query_timestamp.slice(0, 10);
-        if (!dailyMins[day] || r.price_eur < dailyMins[day]) {
-          dailyMins[day] = r.price_eur;
-        }
-      });
-      const labels = Object.keys(dailyMins).reverse();
-      const data = labels.map(d => dailyMins[d]);
-
-      const ctx = document.getElementById("timelineChart").getContext("2d");
-      if (timelineChart) timelineChart.destroy();
-
-      timelineChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: labels,
-          datasets: [{
-            label: "Total 4 Personas (€)",
-            data: data,
-            borderColor: "#10b981",
-            backgroundColor: "rgba(16, 185, 129, 0.1)",
-            borderWidth: 2,
-            tension: 0.25,
-            fill: true,
-            pointBackgroundColor: "#10b981"
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } },
-            y: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } }
-          }
-        }
-      });
-    }
-
-    function renderDepartureComparison(records) {
-      const dateStats = {};
-      records.forEach(r => {
-        if (!dateStats[r.departure_date]) dateStats[r.departure_date] = [];
-        dateStats[r.departure_date].push(r.price_eur);
-      });
-      const labels = Object.keys(dateStats).sort();
-      const averages = labels.map(d => {
-        const arr = dateStats[d];
-        return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
-      });
-
-      const ctx = document.getElementById("datesChart").getContext("2d");
-      if (datesChart) datesChart.destroy();
-
-      datesChart = new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels: labels.map(l => l.slice(5)), // MM-DD
-          datasets: [{
-            label: "Total 4 Pax (€)",
-            data: averages,
-            backgroundColor: "#6366f1",
-            borderRadius: 6
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { display: false }, ticks: { color: "#94a3b8" } },
-            y: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } }
-          }
-        }
-      });
-    }
-
-    function renderTable(records) {
-      const tbody = document.getElementById("table-body");
-      tbody.innerHTML = records.map(r => `
-        <tr class="hover:bg-slate-800/40 transition">
-          <td class="p-3 text-slate-400">${r.query_timestamp.slice(0, 16)}</td>
-          <td class="p-3 font-medium text-white">${r.departure_date} <span class="text-slate-500 font-normal">(${r.return_date})</span></td>
-          <td class="p-3"><span class="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 border border-slate-700 text-slate-300">${r.arrival_airport}</span></td>
-          <td class="p-3">${r.airline}</td>
-          <td class="p-3 font-mono text-slate-400">${r.flight_number}</td>
-          <td class="p-3 text-slate-400">${r.days_before_flight} días</td>
-          <td class="p-3 text-right text-slate-300 font-mono">${r.price_per_pax.toLocaleString()} €</td>
-          <td class="p-3 text-right font-bold text-emerald-400 text-sm font-mono">${r.price_eur.toLocaleString()} €</td>
-        </tr>
-      `).join("");
-    }
-
-    function filterTable() {
-      const q = document.getElementById("filter-input").value.toLowerCase();
-      const filtered = allRecords.filter(r => 
-        r.airline.toLowerCase().includes(q) ||
-        r.departure_date.includes(q) ||
-        r.arrival_airport.toLowerCase().includes(q)
-      );
-      renderTable(filtered);
-    }
-
-    window.addEventListener("DOMContentLoaded", loadDatabase);
-  </script>
-</body>
-</html>
+        <!-- Fecha de consulta del precio mínimo -->
+        <p id="kpi-min-detected" class="text-xs text-
