@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor de Vuelos MAD ➔ NYC (Junio 2027)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SQL.js (WebAssembly) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Encabezado -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
+          <span>✈️</span> MAD ➔ NYC · Junio 2027
+        </h1>
+        <p class="text-slate-400 text-sm mt-1">
+          Rastreo diario de vuelos directos (Estancias de 8 días). Objetivo: detectar el momento óptimo de compra.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <span id="status-badge" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          Cargando datos...
+        </span>
+        <button onclick="loadDatabase()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 transition">
+          🔄 Recargar
+        </button>
+      </div>
+    </header>
+
+    <!-- KPIs / Tarjetas Resumen -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Precio Mínimo Registrado</span>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-min-price" class="text-3xl font-extrabold text-emerald-400">-- €</span>
+        </div>
+        <p id="kpi-min-detail" class="text-xs text-slate-400 mt-1 truncate">Sin datos</p>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Precio Medio Actual</span>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-avg-price" class="text-3xl font-extrabold text-white">-- €</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-1">Promedio de las mejores tarifas directas</p>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Antelación del Precio Más Bajo</span>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-best-advance" class="text-3xl font-extrabold text-cyan-400">--</span>
+          <span class="text-sm text-slate-400">días antes</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-1">Momento histórico de mejor oferta</p>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Consultas Registradas</span>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-records" class="text-3xl font-extrabold text-indigo-400">0</span>
+          <span class="text-sm text-slate-400">billetes analizados</span>
+        </div>
+        <p id="kpi-last-query" class="text-xs text-slate-400 mt-1">Última actualización: --</p>
+      </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Evolución temporal del precio -->
+      <div class="lg:col-span-2 bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+            Curva de Precio Mínimo según Fecha de Consulta
+          </h2>
+          <span class="text-xs text-slate-400">Evolución diaria</span>
+        </div>
+        <div class="h-64">
+          <canvas id="timelineChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Comparativa por Día de Salida (Junio) -->
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+            Precio Medio por Salida
+          </h2>
+          <span class="text-xs text-slate-400">¿Qué día es más barato?</span>
+        </div>
+        <div class="h-64">
+          <canvas id="datesChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla Detallada -->
+    <div class="bg-slate-800/60 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+          Historial de Billetes Encontrados
+        </h2>
+        <div class="flex items-center gap-2">
+          <input type="text" id="filter-input" placeholder="Filtrar por aerolínea o fecha..." onkeyup="filterTable()" class="bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 py-1.5 rounded-lg focus:outline-none focus:border-indigo-500">
+        </div>
+      </div>
+
+      <div class="overflow-x-auto max-h-96">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-900/80 uppercase font-semibold text-slate-400 sticky top-0 border-b border-slate-800">
+            <tr>
+              <th class="p-3">Fecha Consulta</th>
+              <th class="p-3">Salida (8 días)</th>
+              <th class="p-3">Aeropuerto</th>
+              <th class="p-3">Aerolínea</th>
+              <th class="p-3">Vuelo</th>
+              <th class="p-3">Antelación</th>
+              <th class="p-3 text-right">Precio</th>
+            </tr>
+          </thead>
+          <tbody id="table-body" class="divide-y divide-slate-800/50">
+            <tr>
+              <td colspan="7" class="p-6 text-center text-slate-500">Cargando registros...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let timelineChart = null;
+    let datesChart = null;
+    let allRecords = [];
+
+    // Inicializar sql.js y cargar automáticamente el archivo .db
+    async function loadDatabase() {
+      const badge = document.getElementById("status-badge");
+      badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-2";
+      badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Cargando datos...';
+
+      try {
+        const SQL = await initSqlJs({
+          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+        });
+
+        // Intentar descargar el archivo directamente de la misma carpeta
+        const response = await fetch("./madrid_nyc_flights.db", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("No se pudo cargar el archivo madrid_nyc_flights.db (HTTP " + response.status + ")");
+        }
+
+        const buffer = await response.arrayBuffer();
+        const db = new SQL.Database(new Uint8Array(buffer));
+
+        // Consultar los datos
+        const res = db.exec(`
+          SELECT 
+            query_timestamp, days_before_flight, origin, destination_city,
+            arrival_airport, departure_date, return_date, trip_duration_days,
+            airline, flight_number, stops, price_eur, currency
+          FROM flight_prices
+          ORDER BY query_timestamp DESC, price_eur ASC
+        `);
+
+        if (!res.length || !res[0].values.length) {
+          badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300";
+          badge.innerHTML = "Base de datos vacía";
+          return;
+        }
+
+        const columns = res[0].columns;
+        allRecords = res[0].values.map(row => {
+          let obj = {};
+          columns.forEach((col, idx) => obj[col] = row[idx]);
+          return obj;
+        });
+
+        badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        badge.innerHTML = "✓ Datos actualizados";
+
+        renderDashboard(allRecords);
+
+      } catch (err) {
+        console.error(err);
+        badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20";
+        badge.innerHTML = "Error al leer DB";
+        document.getElementById("table-body").innerHTML = `
+          <tr>
+            <td colspan="7" class="p-6 text-center text-rose-400">
+              ${err.message}. Asegúrate de que el repositorio sea público o de ejecutar la web en un servidor compatible.
+            </td>
+          </tr>`;
+      }
+    }
+
+    function renderDashboard(records) {
+      // 1. KPIs
+      const prices = records.map(r => r.price_eur);
+      const minPrice = Math.min(...prices);
+      const minRecord = records.find(r => r.price_eur === minPrice);
+      const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+
+      document.getElementById("kpi-min-price").textContent = `${minPrice.toFixed(0)} €`;
+      document.getElementById("kpi-min-detail").textContent = `${minRecord.airline} (${minRecord.departure_date} ➔ ${minRecord.arrival_airport})`;
+      document.getElementById("kpi-avg-price").textContent = `${avgPrice} €`;
+      document.getElementById("kpi-best-advance").textContent = minRecord.days_before_flight;
+      document.getElementById("kpi-records").textContent = records.length;
+      document.getElementById("kpi-last-query").textContent = `Última: ${records[0].query_timestamp.slice(0, 16)}`;
+
+      // 2. Gráfico de Evolución Temporal (Mínimo por día de consulta)
+      const dailyMins = {};
+      records.forEach(r => {
+        const day = r.query_timestamp.slice(0, 10);
+        if (!dailyMins[day] || r.price_eur < dailyMins[day]) {
+          dailyMins[day] = r.price_eur;
+        }
+      });
+      const timelineLabels = Object.keys(dailyMins).reverse();
+      const timelineData = timelineLabels.map(d => dailyMins[d]);
+
+      renderTimelineChart(timelineLabels, timelineData);
+
+      // 3. Gráfico por Fecha de Salida (Precio promedio por salida en junio)
+      const dateStats = {};
+      records.forEach(r => {
+        if (!dateStats[r.departure_date]) dateStats[r.departure_date] = [];
+        dateStats[r.departure_date].push(r.price_eur);
+      });
+      const dateLabels = Object.keys(dateStats).sort();
+      const dateAverages = dateLabels.map(d => {
+        const arr = dateStats[d];
+        return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+      });
+
+      renderDatesChart(dateLabels, dateAverages);
+
+      // 4. Tabla
+      renderTable(records);
+    }
+
+    function renderTimelineChart(labels, data) {
+      const ctx = document.getElementById("timelineChart").getContext("2d");
+      if (timelineChart) timelineChart.destroy();
+
+      timelineChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "Precio Mínimo (€)",
+            data: data,
+            borderColor: "#10b981",
+            backgroundColor: "rgba(16, 185, 129, 0.1)",
+            borderWidth: 2,
+            tension: 0.25,
+            fill: true,
+            pointBackgroundColor: "#10b981",
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } },
+            y: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } }
+          }
+        }
+      });
+    }
+
+    function renderDatesChart(labels, data) {
+      const ctx = document.getElementById("datesChart").getContext("2d");
+      if (datesChart) datesChart.destroy();
+
+      timelineChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: labels.map(l => l.slice(5)), // MM-DD
+          datasets: [{
+            label: "Promedio (€)",
+            data: data,
+            backgroundColor: "#6366f1",
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: "#94a3b8" } },
+            y: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } }
+          }
+        }
+      });
+    }
+
+    function renderTable(records) {
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = records.map(r => `
+        <tr class="hover:bg-slate-800/40 transition">
+          <td class="p-3 text-slate-400">${r.query_timestamp.slice(0, 16)}</td>
+          <td class="p-3 font-medium text-white">${r.departure_date} <span class="text-slate-500 font-normal">(${r.return_date})</span></td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 border border-slate-700 text-slate-300">${r.arrival_airport}</span></td>
+          <td class="p-3">${r.airline}</td>
+          <td class="p-3 font-mono text-slate-400">${r.flight_number}</td>
+          <td class="p-3 text-slate-400">${r.days_before_flight} días</td>
+          <td class="p-3 text-right font-bold text-emerald-400 text-sm">${r.price_eur} €</td>
+        </tr>
+      `).join("");
+    }
+
+    function filterTable() {
+      const query = document.getElementById("filter-input").value.toLowerCase();
+      const filtered = allRecords.filter(r => 
+        r.airline.toLowerCase().includes(query) ||
+        r.departure_date.includes(query) ||
+        r.arrival_airport.toLowerCase().includes(query)
+      );
+      renderTable(filtered);
+    }
+
+    // Cargar al entrar a la página
+    window.addEventListener("DOMContentLoaded", loadDatabase);
+  </script>
+</body>
+</html>
