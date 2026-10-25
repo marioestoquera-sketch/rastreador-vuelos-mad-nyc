@@ -28,6 +28,8 @@ def load_data():
     return df
 
 df = load_data()
+# Unificar nombres de ciudad históricos
+df["destination_city"] = df["destination_city"].replace({"NYC": "Nueva York"})
 
 if df is None or df.empty:
     st.warning("No se han encontrado registros en la base de datos todavía.")
