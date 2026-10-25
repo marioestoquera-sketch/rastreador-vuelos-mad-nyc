@@ -6,7 +6,7 @@ from serpapi import GoogleSearch
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 DB_PATH = "madrid_nyc_flights.db"
 
-# Muestreo de salidas disponibles entre el 11 y el 30 de junio de 2027
+# Muestreo de fechas de salida entre el 11 y el 30 de junio de 2027
 DEPARTURE_DATES = [
     "2027-06-11",
     "2027-06-14",
@@ -48,7 +48,7 @@ def fetch_and_store_prices():
 
     today = datetime.now()
     
-    # Rotación: 2 consultas al día para mantenerse dentro de la cuota mensual gratuita
+    # Rotación: 2 consultas por día para optimizar la cuota gratuita
     day_of_year = today.timetuple().tm_yday
     idx1 = (day_of_year * 2) % len(DEPARTURE_DATES)
     idx2 = (day_of_year * 2 + 1) % len(DEPARTURE_DATES)
@@ -66,7 +66,7 @@ def fetch_and_store_prices():
         if days_in_advance < 0:
             continue
 
-        # /m/02_286 consulta todos los aeropuertos de NYC (JFK, Newark, LaGuardia)
+        # /m/02_286 consulta todos los aeropuertos de NYC
         params = {
             "engine": "google_flights",
             "departure_id": "MAD",
@@ -112,7 +112,7 @@ def fetch_and_store_prices():
                     query_timestamp, days_before_flight, origin, destination_city,
                     arrival_airport, departure_date, return_date, trip_duration_days,
                     airline, flight_number, stops, price_eur, currency
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 today.strftime("%Y-%m-%d %H:%M:%S"),
                 days_in_advance,
@@ -132,7 +132,7 @@ def fetch_and_store_prices():
 
     conn.commit()
     conn.close()
-    print(f"Finalizado: {total_inserted} opciones guardadas.")
+    print(f"Finalizado con éxito: {total_inserted} opciones guardadas.")
 
 if __name__ == "__main__":
     init_db()
