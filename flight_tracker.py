@@ -6,17 +6,28 @@ from serpapi import GoogleSearch
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 DB_PATH = "madrid_nyc_flights.db"
 
-# Fechas de salida de prueba entre el 11 y el 30 de junio de 2027
-DEPARTURE_DATES = [
-    "2027-06-11",
-    "2027-06-14",
-    "2027-06-18",
-    "2027-06-22",
-    "2027-06-26",
-    "2027-06-30"
+# Destinos y fechas objetivo (4 personas, estancias de 8 días directos)
+TARGETS = [
+    {
+        "city": "Nueva York",
+        "arrival_id": "/m/02_286",  # JFK / EWR / LGA
+        "dates": [
+            "2027-06-11", "2027-06-15", "2027-06-19",
+            "2027-06-23", "2027-06-27", "2027-06-30"
+        ]
+    },
+    {
+        "city": "Edimburgo",
+        "arrival_id": "EDI",        # Aeropuerto de Edimburgo
+        "dates": [
+            "2027-06-12", "2027-06-18", "2027-06-24", # Quincena de junio
+            "2027-09-01", "2027-09-03", "2027-09-05"  # Primera semana de septiembre
+        ]
+    }
 ]
-TRIP_DURATION_DAYS = 8  # Estancia recomendada de 8 días
-PASSENGERS = 4          # 2 adultos + 2 niños de 16 y 13 años (computan como adultos)
+
+TRIP_DURATION_DAYS = 8
+PASSENGERS = 4
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -46,22 +57,24 @@ def init_db():
 
 def fetch_and_store_prices():
     if not SERPAPI_KEY:
-        print("ERROR: No se encontró la variable SERPAPI_KEY.")
+        print("ERROR: Falta SERPAPI_KEY.")
         return
 
     today = datetime.now()
-    
-    # Rotación: 2 consultas al día para no agotar la cuota de SerpApi
     day_of_year = today.timetuple().tm_yday
-    idx1 = (day_of_year * 2) % len(DEPARTURE_DATES)
-    idx2 = (day_of_year * 2 + 1) % len(DEPARTURE_DATES)
-    dates_to_check = [DEPARTURE_DATES[idx1], DEPARTURE_DATES[idx2]]
+
+    # Para no superar la cuota mensual de SerpApi:
+    # 1 consulta a NYC y 1 consulta a Edimburgo cada día (rotando fechas)
+    queries_today = []
+    for target in TARGETS:
+        date_idx = day_of_year % len(target["dates"])
+        queries_today.append((target["city"], target["arrival_id"], target["dates"][date_idx]))
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    total_inserted = 0
+    total_saved = 0
 
-    for dep_date in dates_to_check:
+    for city, arrival_id, dep_date in queries_today:
         dep_dt = datetime.strptime(dep_date, "%Y-%m-%d")
         ret_date = (dep_dt + timedelta(days=TRIP_DURATION_DAYS)).strftime("%Y-%m-%d")
         days_in_advance = (dep_dt - today).days
@@ -69,53 +82,48 @@ def fetch_and_store_prices():
         if days_in_advance < 0:
             continue
 
-        # Consulta directa en Google Flights para 4 pasajeros sin escalas
         params = {
             "engine": "google_flights",
             "departure_id": "MAD",
-            "arrival_id": "/m/02_286",
+            "arrival_id": arrival_id,
             "outbound_date": dep_date,
             "return_date": ret_date,
             "adults": PASSENGERS,
-            "stops": 1,
+            "stops": 1,  # Solo directos
             "currency": "EUR",
             "hl": "es",
             "api_key": SERPAPI_KEY
         }
 
-        print(f"Consultando vuelos para 4 personas: {dep_date} a {ret_date}...")
+        print(f"Consultando MAD ➔ {city} ({arrival_id}) para {dep_date}...")
         search = GoogleSearch(params)
         results = search.get_dict()
 
         if "error" in results:
-            print(f"Aviso para {dep_date}: {results['error']}")
+            print(f"Aviso ({city} - {dep_date}): {results['error']}")
             continue
 
         best_flights = results.get("best_flights", [])
         other_flights = results.get("other_flights", [])
         all_offers = best_flights + other_flights
 
-        for flight_group in all_offers:
-            total_price = flight_group.get("price")
+        for group in all_offers:
+            total_price = group.get("price")
             if not total_price:
                 continue
 
-            flights_list = flight_group.get("flights", [])
-            if not flights_list:
+            legs = group.get("flights", [])
+            if not legs:
                 continue
 
-            stops = len(flights_list) - 1
-            if stops > 0:
+            # Filtro directo estricto
+            if len(legs) > 1:
                 continue
 
-            first_leg = flights_list[0]
-            airline = first_leg.get("airline", "Desconocida")
-            flight_no = first_leg.get("flight_number", "N/A")
-
-            last_leg = flights_list[-1]
-            arrival_airport = last_leg.get("arrival_airport", {}).get("id", "NYC")
-
-            price_per_pax = round(float(total_price) / PASSENGERS, 2)
+            airline = legs[0].get("airline", "Desconocida")
+            flight_no = legs[0].get("flight_number", "N/A")
+            arrival_airport = legs[-1].get("arrival_airport", {}).get("id", arrival_id)
+            price_pax = round(float(total_price) / PASSENGERS, 2)
 
             cursor.execute("""
                 INSERT INTO flight_prices (
@@ -127,7 +135,7 @@ def fetch_and_store_prices():
                 today.strftime("%Y-%m-%d %H:%M:%S"),
                 days_in_advance,
                 "MAD",
-                "NYC",
+                city,
                 arrival_airport,
                 dep_date,
                 ret_date,
@@ -137,14 +145,14 @@ def fetch_and_store_prices():
                 flight_no,
                 0,
                 float(total_price),
-                price_per_pax,
+                price_pax,
                 "EUR"
             ))
-            total_inserted += 1
+            total_saved += 1
 
     conn.commit()
     conn.close()
-    print(f"Finalizado con éxito: {total_inserted} opciones guardadas para 4 pasajeros.")
+    print(f"Finalizado: {total_saved} ofertas guardadas en total.")
 
 if __name__ == "__main__":
     init_db()
