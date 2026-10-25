@@ -48,7 +48,7 @@ def fetch_and_store_prices():
 
     today = datetime.now()
     
-    # Rotación: 2 consultas por día para optimizar la cuota gratuita
+    # Rotación: 2 consultas por día
     day_of_year = today.timetuple().tm_yday
     idx1 = (day_of_year * 2) % len(DEPARTURE_DATES)
     idx2 = (day_of_year * 2 + 1) % len(DEPARTURE_DATES)
@@ -66,19 +66,20 @@ def fetch_and_store_prices():
         if days_in_advance < 0:
             continue
 
-        # /m/02_286 consulta todos los aeropuertos de NYC
+        # stops=1 en Google Flights de SerpApi filtra solo vuelos directos (non-stop)
         params = {
             "engine": "google_flights",
             "departure_id": "MAD",
             "arrival_id": "/m/02_286",
             "outbound_date": dep_date,
             "return_date": ret_date,
+            "stops": 1,
             "currency": "EUR",
             "hl": "es",
             "api_key": SERPAPI_KEY
         }
 
-        print(f"Buscando salida {dep_date} y vuelta {ret_date} ({TRIP_DURATION_DAYS} días)...")
+        print(f"Buscando vuelos directos: salida {dep_date} y vuelta {ret_date} ({TRIP_DURATION_DAYS} días)...")
         search = GoogleSearch(params)
         results = search.get_dict()
 
@@ -90,7 +91,7 @@ def fetch_and_store_prices():
         other_flights = results.get("other_flights", [])
         all_offers = best_flights + other_flights
 
-        for flight_group in all_offers[:5]:
+        for flight_group in all_offers:
             price = flight_group.get("price")
             if not price:
                 continue
@@ -99,10 +100,14 @@ def fetch_and_store_prices():
             if not flights_list:
                 continue
 
+            # Filtro estricto: comprobar que el tramo no tenga escalas (1 solo vuelo por trayecto)
+            stops = len(flights_list) - 1
+            if stops > 0:
+                continue
+
             first_leg = flights_list[0]
             airline = first_leg.get("airline", "Desconocida")
             flight_no = first_leg.get("flight_number", "N/A")
-            stops = len(flights_list) - 1
 
             last_leg = flights_list[-1]
             arrival_airport = last_leg.get("arrival_airport", {}).get("id", "NYC")
@@ -124,7 +129,7 @@ def fetch_and_store_prices():
                 TRIP_DURATION_DAYS,
                 airline,
                 flight_no,
-                stops,
+                0,  # Siempre 0 escalas
                 float(price),
                 "EUR"
             ))
@@ -132,7 +137,7 @@ def fetch_and_store_prices():
 
     conn.commit()
     conn.close()
-    print(f"Finalizado con éxito: {total_inserted} opciones guardadas.")
+    print(f"Finalizado con éxito: {total_inserted} vuelos directos guardados.")
 
 if __name__ == "__main__":
     init_db()
