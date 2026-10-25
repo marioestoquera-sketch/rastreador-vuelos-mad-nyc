@@ -6,7 +6,7 @@ from serpapi import GoogleSearch
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 DB_PATH = "madrid_nyc_flights.db"
 
-# Muestreo de fechas de salida entre el 11 y el 30 de junio de 2027
+# Fechas de salida de prueba entre el 11 y el 30 de junio de 2027
 DEPARTURE_DATES = [
     "2027-06-11",
     "2027-06-14",
@@ -16,6 +16,7 @@ DEPARTURE_DATES = [
     "2027-06-30"
 ]
 TRIP_DURATION_DAYS = 8  # Estancia recomendada de 8 días
+PASSENGERS = 4          # 2 adultos + 2 niños de 16 y 13 años (computan como adultos)
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -31,10 +32,12 @@ def init_db():
             departure_date TEXT NOT NULL,
             return_date TEXT,
             trip_duration_days INTEGER,
+            passengers INTEGER,
             airline TEXT,
             flight_number TEXT,
             stops INTEGER,
             price_eur REAL,
+            price_per_passenger REAL,
             currency TEXT
         )
     """)
@@ -48,7 +51,7 @@ def fetch_and_store_prices():
 
     today = datetime.now()
     
-    # Rotación: 2 consultas por día
+    # Rotación: 2 consultas al día para no agotar la cuota de SerpApi
     day_of_year = today.timetuple().tm_yday
     idx1 = (day_of_year * 2) % len(DEPARTURE_DATES)
     idx2 = (day_of_year * 2 + 1) % len(DEPARTURE_DATES)
@@ -66,20 +69,21 @@ def fetch_and_store_prices():
         if days_in_advance < 0:
             continue
 
-        # stops=1 en Google Flights de SerpApi filtra solo vuelos directos (non-stop)
+        # Consulta directa en Google Flights para 4 pasajeros sin escalas
         params = {
             "engine": "google_flights",
             "departure_id": "MAD",
             "arrival_id": "/m/02_286",
             "outbound_date": dep_date,
             "return_date": ret_date,
+            "adults": PASSENGERS,
             "stops": 1,
             "currency": "EUR",
             "hl": "es",
             "api_key": SERPAPI_KEY
         }
 
-        print(f"Buscando vuelos directos: salida {dep_date} y vuelta {ret_date} ({TRIP_DURATION_DAYS} días)...")
+        print(f"Consultando vuelos para 4 personas: {dep_date} a {ret_date}...")
         search = GoogleSearch(params)
         results = search.get_dict()
 
@@ -92,15 +96,14 @@ def fetch_and_store_prices():
         all_offers = best_flights + other_flights
 
         for flight_group in all_offers:
-            price = flight_group.get("price")
-            if not price:
+            total_price = flight_group.get("price")
+            if not total_price:
                 continue
 
             flights_list = flight_group.get("flights", [])
             if not flights_list:
                 continue
 
-            # Filtro estricto: comprobar que el tramo no tenga escalas (1 solo vuelo por trayecto)
             stops = len(flights_list) - 1
             if stops > 0:
                 continue
@@ -112,12 +115,14 @@ def fetch_and_store_prices():
             last_leg = flights_list[-1]
             arrival_airport = last_leg.get("arrival_airport", {}).get("id", "NYC")
 
+            price_per_pax = round(float(total_price) / PASSENGERS, 2)
+
             cursor.execute("""
                 INSERT INTO flight_prices (
                     query_timestamp, days_before_flight, origin, destination_city,
                     arrival_airport, departure_date, return_date, trip_duration_days,
-                    airline, flight_number, stops, price_eur, currency
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    passengers, airline, flight_number, stops, price_eur, price_per_passenger, currency
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 today.strftime("%Y-%m-%d %H:%M:%S"),
                 days_in_advance,
@@ -127,17 +132,19 @@ def fetch_and_store_prices():
                 dep_date,
                 ret_date,
                 TRIP_DURATION_DAYS,
+                PASSENGERS,
                 airline,
                 flight_no,
-                0,  # Siempre 0 escalas
-                float(price),
+                0,
+                float(total_price),
+                price_per_pax,
                 "EUR"
             ))
             total_inserted += 1
 
     conn.commit()
     conn.close()
-    print(f"Finalizado con éxito: {total_inserted} vuelos directos guardados.")
+    print(f"Finalizado con éxito: {total_inserted} opciones guardadas para 4 pasajeros.")
 
 if __name__ == "__main__":
     init_db()
