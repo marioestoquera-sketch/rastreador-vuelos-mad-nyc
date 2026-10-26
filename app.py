@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import urllib.request
 import pandas as pd
 import streamlit as st
 import plotly.express as px
@@ -11,13 +12,21 @@ st.set_page_config(
 )
 
 DB_PATH = "madrid_nyc_flights.db"
+RAW_DB_URL = "https://raw.githubusercontent.com/marioestoquera-sketch/rastreador-vuelos-mad-nyc/dosdestinos/madrid_nyc_flights.db"
 
 st.title("✈️ Monitor de Vuelos Vacacionales (4 Pasajeros)")
 st.caption("Rastreo diario de vuelos directos desde Madrid (MAD) · Estancias de 8 días")
 
 def load_data():
+    # Descargar siempre la última versión generada por GitHub Actions
+    try:
+        urllib.request.urlretrieve(RAW_DB_URL, DB_PATH)
+    except Exception as e:
+        print(f"Error descargando DB remota: {e}")
+
     if not os.path.exists(DB_PATH):
         return None
+
     conn = sqlite3.connect(DB_PATH)
     try:
         df = pd.read_sql_query("SELECT * FROM flight_prices ORDER BY query_timestamp DESC, price_eur ASC", conn)
