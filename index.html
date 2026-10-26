@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- SQL.js -->
+  <!-- SQL.js (WebAssembly) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
@@ -39,7 +39,7 @@
 
     <!-- Selector de Destino -->
     <div class="flex flex-wrap items-center gap-3 bg-slate-800/40 p-3 rounded-xl border border-slate-800">
-      <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Destino:</span>
+      <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Filtrar destino:</span>
       <div id="destination-filters" class="flex flex-wrap gap-2">
         <button onclick="setDestination('Todos')" class="dest-btn px-3 py-1 text-xs rounded-lg font-medium transition bg-indigo-600 text-white" data-dest="Todos">Todos los destinos</button>
       </div>
@@ -56,7 +56,7 @@
             Analizando datos históricos...
           </h2>
           <p id="recommendation-desc" class="text-sm text-slate-300 max-w-2xl">
-            Calculando la fecha óptima en que las aerolíneas suelen registrar sus tarifas más bajas.
+            Calculando la fecha óptima en que las aerolíneas suelen registrar sus tarifas mínimas.
           </p>
         </div>
 
@@ -75,5 +75,380 @@
         <div class="mt-2 flex items-baseline gap-2">
           <span id="kpi-min-total" class="text-3xl font-extrabold text-emerald-400">-- €</span>
         </div>
-        <!-- Fecha de consulta del precio mínimo -->
-        <p id="kpi-min-detected" class="text-xs text-
+        <p id="kpi-min-detected" class="text-xs text-emerald-300/80 font-medium mt-1">Detectado: --</p>
+        <p id="kpi-min-pax" class="text-xs text-slate-400 truncate">-- € / persona</p>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Media Total (4 Pax)</span>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-avg-total" class="text-3xl font-extrabold text-white">-- €</span>
+        </div>
+        <p id="kpi-avg-pax" class="text-xs text-slate-400 mt-1">-- € promedio / pasajero</p>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Mejor Salida Detectada</span>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-best-date" class="text-2xl font-extrabold text-cyan-400">--</span>
+        </div>
+        <p id="kpi-best-detail" class="text-xs text-slate-400 mt-1 truncate">Directo</p>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Ofertas Analizadas</span>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="kpi-records" class="text-3xl font-extrabold text-indigo-400">0</span>
+          <span class="text-sm text-slate-400">tarifas</span>
+        </div>
+        <p id="kpi-last-query" class="text-xs text-slate-400 mt-1">Última consulta: --</p>
+      </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+            Evolución del Precio Mínimo Diario (4 Pax)
+          </h2>
+          <span class="text-xs text-slate-400">Curva de precios en el tiempo</span>
+        </div>
+        <div class="h-64">
+          <canvas id="timelineChart"></canvas>
+        </div>
+      </div>
+
+      <div class="bg-slate-800/60 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+            Precio Medio por Salida
+          </h2>
+          <span class="text-xs text-slate-400">Total 4 personas</span>
+        </div>
+        <div class="h-64">
+          <canvas id="datesChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla Detallada -->
+    <div class="bg-slate-800/60 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+          Listado Histórico de Billetes Directos
+        </h2>
+        <input type="text" id="filter-input" placeholder="Filtrar aerolínea, destino o fecha..." onkeyup="filterTable()" class="bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 py-1.5 rounded-lg focus:outline-none focus:border-indigo-500">
+      </div>
+
+      <div class="overflow-x-auto max-h-96">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-900/80 uppercase font-semibold text-slate-400 sticky top-0 border-b border-slate-800">
+            <tr>
+              <th class="p-3">Fecha Consulta</th>
+              <th class="p-3">Destino</th>
+              <th class="p-3">Salida (8 días)</th>
+              <th class="p-3">Aeropuerto</th>
+              <th class="p-3">Aerolínea</th>
+              <th class="p-3">Vuelo</th>
+              <th class="p-3">Antelación</th>
+              <th class="p-3 text-right">Precio / Pax</th>
+              <th class="p-3 text-right">Total 4 Pax</th>
+            </tr>
+          </thead>
+          <tbody id="table-body" class="divide-y divide-slate-800/50">
+            <tr>
+              <td colspan="9" class="p-6 text-center text-slate-500">Cargando registros...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let timelineChart = null;
+    let datesChart = null;
+    let rawRecords = [];
+    let currentDestination = "Todos";
+
+    async function loadDatabase() {
+      const badge = document.getElementById("status-badge");
+      badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-2";
+      badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Cargando datos...';
+
+      try {
+        const SQL = await initSqlJs({
+          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+        });
+
+        const response = await fetch("./madrid_nyc_flights.db", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("No se pudo descargar madrid_nyc_flights.db (HTTP " + response.status + ")");
+        }
+
+        const buffer = await response.arrayBuffer();
+        const db = new SQL.Database(new Uint8Array(buffer));
+
+        const res = db.exec(`
+          SELECT 
+            query_timestamp, days_before_flight, origin, destination_city,
+            arrival_airport, departure_date, return_date, trip_duration_days,
+            airline, flight_number, stops, price_eur
+          FROM flight_prices
+          ORDER BY query_timestamp DESC, price_eur ASC
+        `);
+
+        if (!res.length || !res[0].values.length) {
+          badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-300";
+          badge.innerHTML = "Base de datos vacía";
+          return;
+        }
+
+        const columns = res[0].columns;
+        rawRecords = res[0].values.map(row => {
+          let obj = {};
+          columns.forEach((col, idx) => obj[col] = row[idx]);
+
+          // Unificar nombres históricos: NYC pasa a ser "Nueva York"
+          if (obj.destination_city === "NYC") {
+            obj.destination_city = "Nueva York";
+          }
+
+          // Si el aeropuerto es EDI, forzar el destino a Edimburgo por consistencia
+          if (obj.arrival_airport === "EDI") {
+            obj.destination_city = "Edimburgo";
+          }
+
+          // Calcular precio por persona para 4 pasajeros
+          obj.price_per_passenger = Math.round(obj.price_eur / 4);
+          return obj;
+        });
+
+        badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        badge.innerHTML = "✓ Datos actualizados";
+
+        buildDestinationFilters();
+        applyFilterAndRender();
+
+      } catch (err) {
+        console.error(err);
+        badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20";
+        badge.innerHTML = "Error al leer DB";
+        document.getElementById("table-body").innerHTML = `
+          <tr><td colspan="9" class="p-6 text-center text-rose-400">${err.message}</td></tr>`;
+      }
+    }
+
+    function buildDestinationFilters() {
+      const container = document.getElementById("destination-filters");
+      const destinations = Array.from(new Set(rawRecords.map(r => r.destination_city))).filter(Boolean).sort();
+
+      container.innerHTML = `
+        <button onclick="setDestination('Todos')" class="dest-btn px-3 py-1 text-xs rounded-lg font-medium transition ${currentDestination === 'Todos' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}" data-dest="Todos">
+          Todos los destinos
+        </button>
+      ` + destinations.map(dest => `
+        <button onclick="setDestination('${dest}')" class="dest-btn px-3 py-1 text-xs rounded-lg font-medium transition ${currentDestination === dest ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}" data-dest="${dest}">
+          ${dest}
+        </button>
+      `).join("");
+    }
+
+    function setDestination(dest) {
+      currentDestination = dest;
+      document.querySelectorAll(".dest-btn").forEach(btn => {
+        if (btn.getAttribute("data-dest") === dest) {
+          btn.className = "dest-btn px-3 py-1 text-xs rounded-lg font-medium transition bg-indigo-600 text-white";
+        } else {
+          btn.className = "dest-btn px-3 py-1 text-xs rounded-lg font-medium transition bg-slate-800 text-slate-300 hover:bg-slate-700";
+        }
+      });
+      applyFilterAndRender();
+    }
+
+    function applyFilterAndRender() {
+      let filtered = rawRecords;
+      if (currentDestination !== "Todos") {
+        filtered = rawRecords.filter(r => r.destination_city === currentDestination);
+      }
+      renderDashboard(filtered);
+    }
+
+    function renderDashboard(records) {
+      if (!records.length) return;
+
+      const prices = records.map(r => r.price_eur);
+      const minPrice = Math.min(...prices);
+      const minRecord = records.find(r => r.price_eur === minPrice);
+      const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+
+      const detectedDate = minRecord.query_timestamp.slice(0, 10);
+
+      // 1. KPIs
+      document.getElementById("kpi-min-total").textContent = `${minPrice.toLocaleString()} €`;
+      document.getElementById("kpi-min-detected").textContent = `🔍 Visto el ${detectedDate} (hace ${minRecord.days_before_flight} d)`;
+      document.getElementById("kpi-min-pax").textContent = `${minRecord.price_per_passenger.toLocaleString()} € / pax (${minRecord.airline})`;
+
+      document.getElementById("kpi-avg-total").textContent = `${avgPrice.toLocaleString()} €`;
+      document.getElementById("kpi-avg-pax").textContent = `${Math.round(avgPrice / 4).toLocaleString()} € promedio / pax`;
+
+      document.getElementById("kpi-best-date").textContent = minRecord.departure_date;
+      document.getElementById("kpi-best-detail").textContent = `${minRecord.destination_city} · ${minRecord.airline} (${minRecord.arrival_airport})`;
+
+      document.getElementById("kpi-records").textContent = records.length;
+      document.getElementById("kpi-last-query").textContent = `Última: ${records[0].query_timestamp.slice(0, 16)}`;
+
+      // 2. Recomendación
+      updateRecommendation(minRecord, detectedDate);
+
+      // 3. Gráficos
+      renderTimelineChart(records);
+      renderDatesChart(records);
+
+      // 4. Tabla
+      renderTable(records);
+    }
+
+    function updateRecommendation(bestOffer, detectedDate) {
+      const flightDate = new Date(bestOffer.departure_date);
+      const isEurope = bestOffer.destination_city.includes("Edimburgo");
+
+      const windowStartDays = isEurope ? 90 : 160;
+      const windowEndDays = isEurope ? 60 : 130;
+
+      const startDate = new Date(flightDate);
+      startDate.setDate(startDate.getDate() - windowStartDays);
+
+      const endDate = new Date(flightDate);
+      endDate.setDate(endDate.getDate() - windowEndDays);
+
+      const startStr = startDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+      const endStr = endDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      document.getElementById("recommendation-title").textContent = 
+        `Reserva recomendada entre el ${startStr} y el ${endStr}`;
+      
+      document.getElementById("recommendation-desc").textContent = 
+        `Para viajar a ${bestOffer.destination_city} saliendo el ${bestOffer.departure_date}, la tarifa mínima actual es de ${bestOffer.price_eur.toLocaleString()} € total (${bestOffer.price_per_passenger.toLocaleString()} €/pax) con ${bestOffer.airline}. Cazada en la consulta del ${detectedDate}.`;
+
+      document.getElementById("target-buy-date").textContent = `${startStr} - ${endStr}`;
+      document.getElementById("target-detected-on").textContent = `Detectada en consulta: ${detectedDate}`;
+    }
+
+    function renderTimelineChart(records) {
+      const dailyMins = {};
+      records.forEach(r => {
+        const day = r.query_timestamp.slice(0, 10);
+        if (!dailyMins[day] || r.price_eur < dailyMins[day]) {
+          dailyMins[day] = r.price_eur;
+        }
+      });
+      const labels = Object.keys(dailyMins).reverse();
+      const data = labels.map(d => dailyMins[d]);
+
+      const ctx = document.getElementById("timelineChart").getContext("2d");
+      if (timelineChart) timelineChart.destroy();
+
+      timelineChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "Mínimo Total 4 Pax (€)",
+            data: data,
+            borderColor: "#10b981",
+            backgroundColor: "rgba(16, 185, 129, 0.1)",
+            borderWidth: 2,
+            tension: 0.25,
+            fill: true,
+            pointBackgroundColor: "#10b981"
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } },
+            y: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } }
+          }
+        }
+      });
+    }
+
+    function renderDatesChart(records) {
+      const dateStats = {};
+      records.forEach(r => {
+        if (!dateStats[r.departure_date]) dateStats[r.departure_date] = [];
+        dateStats[r.departure_date].push(r.price_eur);
+      });
+      const labels = Object.keys(dateStats).sort();
+      const averages = labels.map(d => {
+        const arr = dateStats[d];
+        return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+      });
+
+      const ctx = document.getElementById("datesChart").getContext("2d");
+      if (datesChart) datesChart.destroy();
+
+      datesChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: labels.map(l => l.slice(5)),
+          datasets: [{
+            label: "Total 4 Pax (€)",
+            data: averages,
+            backgroundColor: "#6366f1",
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: "#94a3b8" } },
+            y: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#94a3b8" } }
+          }
+        }
+      });
+    }
+
+    function renderTable(records) {
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = records.map(r => `
+        <tr class="hover:bg-slate-800/40 transition">
+          <td class="p-3 text-slate-400 font-mono">${r.query_timestamp.slice(0, 16)}</td>
+          <td class="p-3 font-medium text-white">${r.destination_city}</td>
+          <td class="p-3 text-slate-300">${r.departure_date} <span class="text-slate-500 font-normal">(${r.return_date})</span></td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 border border-slate-700 text-slate-300">${r.arrival_airport}</span></td>
+          <td class="p-3">${r.airline}</td>
+          <td class="p-3 font-mono text-slate-400">${r.flight_number}</td>
+          <td class="p-3 text-slate-400">${r.days_before_flight} días</td>
+          <td class="p-3 text-right text-slate-300 font-mono">${r.price_per_passenger.toLocaleString()} €</td>
+          <td class="p-3 text-right font-bold text-emerald-400 text-sm font-mono">${r.price_eur.toLocaleString()} €</td>
+        </tr>
+      `).join("");
+    }
+
+    function filterTable() {
+      const q = document.getElementById("filter-input").value.toLowerCase();
+      let base = rawRecords;
+      if (currentDestination !== "Todos") {
+        base = rawRecords.filter(r => r.destination_city === currentDestination);
+      }
+      const filtered = base.filter(r => 
+        r.airline.toLowerCase().includes(q) ||
+        r.destination_city.toLowerCase().includes(q) ||
+        r.departure_date.includes(q) ||
+        r.arrival_airport.toLowerCase().includes(q)
+      );
+      renderTable(filtered);
+    }
+
+    window.addEventListener("DOMContentLoaded", loadDatabase);
+  </script>
+</body>
+</html>
