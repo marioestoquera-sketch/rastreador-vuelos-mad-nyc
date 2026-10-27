@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 DB_PATH = "madrid_nyc_flights.db"
-RAW_DB_URL = "https://raw.githubusercontent.com/marioestoquera-sketch/rastreador-vuelos-mad-nyc/dosdestinos/madrid_nyc_flights.db"
+RAW_DB_URL = "https://raw.githubusercontent.com/marioestoquera-sketch/rastreador-vuelos-mad-nyc/main/madrid_nyc_flights.db"
 
 st.title("✈️ Monitor de Vuelos Vacacionales (4 Pasajeros)")
 st.caption("Rastreo diario de vuelos directos desde Madrid (MAD) · Estancias de 8 días")
