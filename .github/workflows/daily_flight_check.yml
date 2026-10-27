@@ -8,6 +8,9 @@ on:
 jobs:
   track-flights:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Permiso imprescindible para permitir al bot hacer commit/push
+      
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
@@ -27,8 +30,8 @@ jobs:
 
       - name: Guardar base de datos actualizada en el repositorio
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           git add madrid_nyc_flights.db
-          git commit -m "Actualizar precios de vuelos [skip ci]" || exit 0
-          git push
+          # Si no hay cambios, no falla
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Actualizar precios de vuelos [skip ci]" && git push origin dosdestinos)
